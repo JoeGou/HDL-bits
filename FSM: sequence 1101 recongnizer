@@ -1,0 +1,55 @@
+This is the second component in a series of five exercises that builds a complex counter out of several smaller circuits. See the final exercise for the overall design.
+Build a finite-state machine that searches for the sequence 1101 in an input bit stream. When the sequence is found, it should set start_shifting to 1, forever, 
+until reset. Getting stuck in the final state is intended to model going to other states in a bigger FSM that is not yet implemented. 
+We will be extending this FSM in the next few exercises.
+
+module top_module (
+    input clk,
+    input reset,      // Synchronous reset
+    input data,
+    output start_shifting);
+    
+    parameter 
+    A = 4'H0,
+    B = 4'H1,
+    C = 4'H2,
+    D = 4'H3,
+    E = 4'H4;
+    
+    reg [3:0] state,nstate;
+    
+    always @(*)begin //state transition
+        case(state)
+            A : begin
+                nstate <= data? B : A;
+            end
+            B : begin
+                nstate <= data? C : A;
+            end
+            C : begin
+                nstate <= data? C : D;
+            end
+            D : begin
+                nstate <= data? E : A;
+            end
+            E : begin
+                nstate <= E;
+            end
+        endcase
+    end
+    
+    always @(posedge clk)begin // state FF
+        if(reset)begin
+            state <= A;
+        end
+        else begin
+            state <= nstate;
+        end
+    end
+    
+    always @(*)begin // output
+        start_shifting = state == E;
+    end
+        
+
+endmodule
