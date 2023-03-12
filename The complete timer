@@ -1,0 +1,121 @@
+We want to create a timer with one input that:
+
+is started when a particular input pattern (1101) is detected,
+shifts in 4 more bits to determine the duration to delay,
+waits for the counters to finish counting, and
+notifies the user and waits for the user to acknowledge the timer.
+The serial data is available on the data input pin. When the pattern 1101 is received, the circuit must then shift in the next 4 bits, most-significant-bit first. These 4 bits determine the duration of the timer delay. I'll refer to this as the delay[3:0].
+
+After that, the state machine asserts its counting output to indicate it is counting. The state machine must count for exactly (delay[3:0] + 1) * 1000 clock cycles. e.g., delay=0 means count 1000 cycles, and delay=5 means count 6000 cycles. Also output the current remaining time. This should be equal to delay for 1000 cycles, then delay-1 for 1000 cycles, and so on until it is 0 for 1000 cycles. When the circuit isn't counting, the count[3:0] output is don't-care (whatever value is convenient for you to implement).
+
+At that point, the circuit must assert done to notify the user the timer has timed out, and waits until input ack is 1 before being reset to look for the next occurrence of the start sequence (1101).
+
+The circuit should reset into a state where it begins searching for the input sequence 1101.
+
+module top_module (
+    input clk,
+    input reset,      // Synchronous reset
+    input data,
+    output [3:0] count,
+    output counting,
+    output done,
+    input ack );
+
+    parameter
+    A = 4'H0,
+    B = 4'H1,
+    C = 4'H2,
+    D = 4'H3,
+    E = 4'H4,
+	F = 4'H5,
+    G = 4'H6,
+    H = 4'H7;
+    reg[3:0]state,nstate,q;
+    reg[4:0]delay,count_delay;
+    reg[15:0]counter;
+    
+    always @(*)begin
+        case(state)
+            A : begin
+                nstate <= data? B : A;
+            end
+            B : begin
+                nstate <= data? C : A;
+            end
+            C : begin
+                nstate <= data? C : D;
+            end
+            D : begin
+                nstate <= data? E : A;
+            end
+            E : begin
+                nstate <= F;
+            end
+            F : begin
+                nstate <= q == 3 ? G : F;
+            end
+            G : begin
+                nstate <= delay == counter ? (counter == 0 ?  H : G) : G;
+            end
+            H : begin
+                nstate <= ack? A : H;
+            end
+        endcase
+    end
+    
+    always @(posedge clk)begin
+        if(reset)begin
+            counter <= 0;
+        end else if(nstate == G)begin
+            		if(counter == 16'd999)begin
+                		counter <= 0;
+            		end else begin
+                		counter <= counter + 1;
+                    end
+        		end else begin
+            	counter <= 0;
+        	end
+    end
+    
+    always @(posedge clk)begin
+        if(reset)begin
+            q <= 0;
+        end else if(nstate == F)begin
+            q <= q + 1;
+        end else begin
+            q <= 0;
+        end
+    end
+            
+    
+    always @(posedge clk)begin
+        if(reset)begin
+            delay <= 0;
+        end else if(state == F || state == E)begin
+            delay <= {delay[2:0],data};
+        end else if(nstate == G)begin
+            if(counter == 0)begin
+                delay <= delay == counter? 0 : delay -1;
+            end else begin
+                delay <= delay;
+            end
+        end
+    end
+                
+            
+    
+    always @(posedge clk)begin
+        if(reset)begin
+            state <= A;
+        end else begin
+            state <= nstate;
+        end
+    end
+    
+    always @(*)begin
+        count = state == G? delay[3:0] : 0;
+        counting = state == G;
+        done = state == H;
+    end
+endmodule
+
